@@ -1,0 +1,23 @@
+# .dockerignore (Root)
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+.DS_Store
+.env
+.env.example
+.vscode
+.idea
+dist
+build
+coverage
+.nyc_output
+*.log
+.next
+out
+.eslintcache
+.pnp
+.pnp.js
+yarn-error.log
+package-lock.json
