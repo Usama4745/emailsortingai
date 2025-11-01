@@ -27,7 +27,6 @@ export function AuthProvider({ children }) {
 
         // Check if token exists
         const token = localStorage.getItem('authToken');
-        alert("auth here")
 
         if (!token) {
           setLoading(false);
