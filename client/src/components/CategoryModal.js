@@ -41,7 +41,6 @@ function CategoryModal({ category, onSave, onClose }) {
     e.preventDefault();
 
     if (!name.trim() || !description.trim()) {
-      alert('Please fill in all fields');
       return;
     }
 

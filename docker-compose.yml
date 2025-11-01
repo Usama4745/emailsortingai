@@ -1,6 +1,6 @@
 # docker-compose.yml
-# Complete Docker Compose setup for AI Email Sorter
-# Includes: MongoDB, Express Backend, React Frontend
+# Production Docker Compose setup for AI Email Sorter
+# Deploy on production server
 
 version: '3.8'
 
@@ -11,25 +11,31 @@ services:
   mongodb:
     image: mongo:latest
     container_name: email-sorter-mongodb
-    restart: unless-stopped
+    restart: always
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"  # Only accessible from localhost (security)
     environment:
-      # Optional: Set MongoDB root credentials
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
       MONGO_INITDB_DATABASE: email-sorter
     volumes:
-      # Persist database data
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
     networks:
       - email-sorter-network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test -u ${MONGO_USERNAME:-admin} -p ${MONGO_PASSWORD:-changeme} --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
 
   # ==========================================
   # Express Backend Service
@@ -39,22 +45,22 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: email-sorter-backend
-    restart: unless-stopped
+    restart: always
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"  # Only accessible from localhost
     environment:
       # Database
-      DATABASE_URL: mongodb://admin:password@mongodb:27017/email-sorter?authSource=admin
-      NODE_ENV: development
+      DATABASE_URL: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-changeme}@mongodb:27017/email-sorter?authSource=admin
+      NODE_ENV: production
       
       # Server
       PORT: 5000
-      CLIENT_URL: http://localhost:3000
+      CLIENT_URL: ${CLIENT_URL}
       
       # Google OAuth
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: http://localhost:5000/api/auth/google/callback
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
       
       # Claude API
       CLAUDE_API_KEY: ${CLAUDE_API_KEY}
@@ -70,47 +76,96 @@ services:
       EMAIL_SYNC_INTERVAL: 3600000
       
       # Security
-      CORS_ORIGIN: http://localhost:3000
+      CORS_ORIGIN: ${CORS_ORIGIN}
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX_REQUESTS: 100
     depends_on:
       mongodb:
         condition: service_healthy
-    volumes:
-      # Hot reload for development
-      - ./server/src:/app/src
-      - /app/node_modules
     networks:
       - email-sorter-network
     healthcheck:
       test: curl -f http://localhost:5000/health || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    read_only_root_filesystem: false
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
 
   # ==========================================
-  # React Frontend Service
+  # Nginx Reverse Proxy (Production Web Server)
+  # ==========================================
+  nginx:
+    image: nginx:alpine
+    container_name: email-sorter-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # For SSL certificates
+      - ./letsencrypt:/etc/letsencrypt:ro
+    environment:
+      - SERVER_NAME=${SERVER_NAME}
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - email-sorter-network
+    healthcheck:
+      test: wget --quiet --tries=1 --spider http://localhost:80/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  # ==========================================
+  # React Frontend Service (Built)
   # ==========================================
   frontend:
     build:
       context: ./client
       dockerfile: Dockerfile
     container_name: email-sorter-frontend
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
+    restart: always
     environment:
-      # React environment variables
-      REACT_APP_API_URL: http://localhost:5000/api
+      # These are build-time variables
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
       REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-    depends_on:
-      - backend
-    volumes:
-      # Hot reload for development
-      - ./client/src:/app/src
-      - /app/node_modules
     networks:
       - email-sorter-network
+    healthcheck:
+      test: wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
 
 # ==========================================
 # Networks
@@ -118,10 +173,15 @@ services:
 networks:
   email-sorter-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 # ==========================================
 # Volumes
 # ==========================================
 volumes:
   mongodb_data:
+    driver: local
   mongodb_config:
+    driver: local

@@ -17,14 +17,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  
   /**
    * Check if user is logged in on mount
    */
   useEffect(() => {
     const checkAuth = async () => {
       try {
+
         // Check if token exists
         const token = localStorage.getItem('authToken');
+        alert("auth here")
+
         if (!token) {
           setLoading(false);
           return;

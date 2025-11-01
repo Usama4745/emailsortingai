@@ -45,6 +45,7 @@ router.get(
 
       // Generate JWT token
       const token = generateToken(user._id);
+     
 
       // Create primary account for the user if it doesn't exist
       const existingAccount = await Account.findOne({
@@ -71,6 +72,8 @@ router.get(
 
       // Redirect to frontend with token
       const redirectUrl = `${process.env.CLIENT_URL}/auth/success?token=${token}&userId=${user._id}`;
+      console.error("url is here ")
+      console.error(redirectUrl);
       res.redirect(redirectUrl);
     } catch (error) {
       console.error('Error in OAuth callback:', error);
