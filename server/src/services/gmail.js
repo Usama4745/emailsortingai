@@ -3,28 +3,50 @@
  * Gmail API integration service
  * Handles all Gmail API operations including fetching, archiving, and label management
  */
-require('dotenv').config();
+
 const { google } = require('googleapis');
 const { Account, Email } = require('../config/database');
 
 /**
  * Create Gmail client with user's OAuth token
+ * Handles token refresh if needed
  * @param {string} accessToken - User's Google access token
+ * @param {string} refreshToken - User's Google refresh token (optional)
+ * @param {object} account - Account object for updating tokens
  * @returns {object} Gmail API client instance
  */
-function createGmailClient(accessToken) {
-    console.log("env is here sna d herer")
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
+function createGmailClient(accessToken, refreshToken = null, account = null) {
+  try {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
 
-  auth.setCredentials({
-    access_token: accessToken,
-  });
+    auth.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
 
-  return google.gmail({ version: 'v1', auth });
+    // Listen for token refresh events
+    auth.on('tokens', (tokens) => {
+      if (tokens.refresh_token && account) {
+        // Update refresh token in database if a new one is issued
+        account.refreshToken = tokens.refresh_token;
+        account.save().catch((err) => console.error('Error saving refresh token:', err));
+      }
+      if (tokens.access_token && account) {
+        // Update access token
+        account.accessToken = tokens.access_token;
+        account.save().catch((err) => console.error('Error saving access token:', err));
+      }
+    });
+
+    return google.gmail({ version: 'v1', auth });
+  } catch (error) {
+    console.error('❌ Error creating Gmail client:', error.message);
+    throw error;
+  }
 }
 
 /**
@@ -42,18 +64,41 @@ async function fetchUnreadEmails(userId, accountId, maxResults = 50) {
       throw new Error('Account not found');
     }
 
-    const gmail = createGmailClient(account.accessToken);
+    console.log('📧 Fetching emails for account:', account.email);
+
+    // Check if tokens exist
+    if (!account.accessToken) {
+      console.error('❌ No access token found - user needs to re-authorize Gmail');
+      throw new Error('Access token missing - user needs to re-authorize');
+    }
+
+    // Create Gmail client with refresh token support (NOT async)
+    const gmail = createGmailClient(
+      account.accessToken,
+      account.refreshToken,
+      account
+    );
 
     // Query for unread emails
+    console.log('🔍 Querying for unread emails...');
     const response = await gmail.users.messages.list({
       userId: 'me',
       q: 'is:unread -label:archived',
       maxResults: maxResults,
     });
 
-    if (!response.data.messages) {
+    // Verify response structure
+    if (!response || !response.data) {
+      console.log('⚠️  No response data from Gmail API');
       return [];
     }
+
+    if (!response.data.messages || response.data.messages.length === 0) {
+      console.log('✅ No unread emails found');
+      return [];
+    }
+
+    console.log(`📨 Found ${response.data.messages.length} unread emails`);
 
     // Fetch full message details for each email
     const emails = await Promise.all(
@@ -66,9 +111,17 @@ async function fetchUnreadEmails(userId, accountId, maxResults = 50) {
       )
     );
 
+    console.log(`✅ Fetched ${emails.length} email details`);
     return emails.map((email) => parseEmailMessage(email.data));
   } catch (error) {
-    console.error('Error fetching emails from Gmail:', error);
+    console.error('❌ Error fetching emails from Gmail:', error.message);
+    
+    // If it's an auth error, provide helpful message
+    if (error.message.includes('Invalid Credentials')) {
+      console.error('⚠️  Invalid credentials - user may need to re-authenticate');
+      console.error('💡 Have user click "Re-authorize Gmail" to refresh tokens');
+    }
+    
     throw error;
   }
 }

@@ -1,91 +1,40 @@
-# docker-compose.yml
+# docker-compose.yml (External MongoDB)
 # Production Docker Compose setup for AI Email Sorter
-# Deploy on production server
+# Uses external MongoDB URL (MongoDB Atlas, etc.)
 
 version: '3.8'
 
 services:
   # ==========================================
-  # MongoDB Database Service
-  # ==========================================
-  mongodb:
-    env_file:
-    - .env.example
-    image: mongo:latest
-    container_name: email-sorter-mongodb
-    restart: always
-    ports:
-      - "127.0.0.1:27017:27017"  # Only accessible from localhost (security)
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-}
-      MONGO_INITDB_DATABASE: email-sorter
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    networks:
-      - email-sorter-network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test -u ${MONGO_USERNAME:-admin} -p ${MONGO_PASSWORD:-} --quiet
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    security_opt:
-      - no-new-privileges:true
-
-  # ==========================================
   # Express Backend Service
   # ==========================================
   backend:
-    env_file:
-    - .env.example 
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     container_name: email-sorter-backend
     restart: always
     ports:
-      - "127.0.0.1:5000:5000"  # Only accessible from localhost
+      - "5000:5000"
     environment:
-      # Database
-      DATABASE_URL: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-changeme}@mongodb:27017/email-sorter?authSource=admin
+      # Database - Use external MongoDB URL
+      DATABASE_URL: ${DATABASE_URL}
       NODE_ENV: production
-      
-      # Server
       PORT: 5000
       CLIENT_URL: ${CLIENT_URL}
-      
-      # Google OAuth
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
-      
-      # Claude API
       CLAUDE_API_KEY: ${CLAUDE_API_KEY}
       AI_MODEL: claude-3-5-sonnet-20241022
-      
-      # JWT & Session
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRE: 7d
       SESSION_SECRET: ${SESSION_SECRET}
-      
-      # Email Processing
       MAX_EMAILS_PER_SYNC: 50
       EMAIL_SYNC_INTERVAL: 3600000
-      
-      # Security
       CORS_ORIGIN: ${CORS_ORIGIN}
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX_REQUESTS: 100
-    depends_on:
-      mongodb:
-        condition: service_healthy
     networks:
       - email-sorter-network
     healthcheck:
@@ -99,64 +48,19 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    security_opt:
-      - no-new-privileges:true
-    read_only_root_filesystem: false
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
 
   # ==========================================
-  # Nginx Reverse Proxy (Production Web Server)
-  # ==========================================
-  nginx:
-    env_file:
-    - .env.example
-    image: nginx:alpine
-    container_name: email-sorter-nginx
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # For SSL certificates
-      - ./letsencrypt:/etc/letsencrypt:ro
-    environment:
-      - SERVER_NAME=${SERVER_NAME}
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - email-sorter-network
-    healthcheck:
-      test: wget --quiet --tries=1 --spider http://localhost:80/health || exit 1
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    security_opt:
-      - no-new-privileges:true
-
-  # ==========================================
-  # React Frontend Service (Built)
+  # React Frontend Service
   # ==========================================
   frontend:
-    env_file:
-    - .env.example
     build:
-      context: ./client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: client/Dockerfile
     container_name: email-sorter-frontend
     restart: always
+    ports:
+      - "3000:3000"
     environment:
-      # These are build-time variables
       REACT_APP_API_URL: ${REACT_APP_API_URL}
       REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     networks:
@@ -172,24 +76,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    security_opt:
-      - no-new-privileges:true
 
-# ==========================================
-# Networks
-# ==========================================
 networks:
   email-sorter-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
 
-# ==========================================
-# Volumes
-# ==========================================
-volumes:
-  mongodb_data:
-    driver: local
-  mongodb_config:
-    driver: local
+# No volumes needed - MongoDB is external

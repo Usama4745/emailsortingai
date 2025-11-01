@@ -7,10 +7,22 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { Category } = require('../config/database');
 
-// Initialize Anthropic client
-const client = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY,
-});
+try {
+  if (!process.env.CLAUDE_API_KEY) {
+    throw new Error('CLAUDE_API_KEY is not set in environment variables');
+  }
+  
+  const client = new Anthropic({
+    apiKey: process.env.CLAUDE_API_KEY,
+  });
+  
+  console.log(process.env.CLAUDE_API_KEY);
+  console.log('✅ Anthropic SDK initialized successfully');
+} catch (error) {
+  console.error('❌ Failed to initialize Anthropic SDK:', error.message);
+  console.error('Make sure CLAUDE_API_KEY is set in .env file');
+  client = null;
+}
 
 /**
  * Classify email into a category based on AI analysis
@@ -20,6 +32,17 @@ const client = new Anthropic({
  */
 async function classifyEmail(userId, email) {
   try {
+    // Check if client is initialized
+    if (!client) {
+      console.error('❌ Claude API client not initialized');
+      return {
+        categoryId: null,
+        categoryName: 'Unclassified',
+        confidence: 0,
+        error: 'Claude API not configured',
+      };
+    }
+
     // Fetch user's categories
     const categories = await Category.find({ userId });
 
@@ -82,8 +105,14 @@ Only respond with valid JSON, no other text.`;
       reasoning: classification.reasoning,
     };
   } catch (error) {
-    console.error('Error classifying email:', error);
-    throw error;
+    console.error('❌ Error classifying email:', error.message);
+    // Return unclassified instead of throwing
+    return {
+      categoryId: null,
+      categoryName: 'Unclassified',
+      confidence: 0,
+      error: error.message,
+    };
   }
 }
 
@@ -100,7 +129,10 @@ Subject: ${email.subject}
 Body: ${email.body}
 
 Provide a concise summary suitable for quick scanning. Only return the summary text, no other content.`;
-
+const client = new Anthropic({
+    apiKey: process.env.CLAUDE_API_KEY,
+  });
+  
     const message = await client.messages.create({
       model: process.env.AI_MODEL || 'claude-3-5-sonnet-20241022',
       max_tokens: 150,
