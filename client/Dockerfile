@@ -1,5 +1,5 @@
 # client/Dockerfile
-# Multi-stage build for React frontend
+# Multi-stage build for React frontend (No Nginx)
 
 # ==========================================
 # Build Stage
@@ -9,34 +9,35 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY client/package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy application code
-COPY . .
+COPY client/src ./src
+COPY client/public ./public
 
 # Build React app
 RUN npm run build
 
 # ==========================================
-# Production Stage - Nginx
+# Production Stage - Node HTTP Server
 # ==========================================
-FROM nginx:alpine
+FROM node:18-alpine
 
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
+
+# Install serve to serve static files
+RUN npm install -g serve
 
 # Copy built app from builder
-COPY --from=builder /app/build /usr/share/nginx/html
-
-# Install dumb-init
-RUN apk add --no-cache dumb-init
+COPY --from=builder /app/build ./build
 
 # Create non-root user
-RUN addgroup -g 1001 -S nginx
-RUN adduser -S nginx -u 1001
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+USER nodejs
 
 # Expose port
 EXPOSE 3000
@@ -45,6 +46,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Start nginx
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["nginx", "-g", "daemon off;"]
+# Start serving static files
+CMD ["serve", "-s", "build", "-l", "3000"]

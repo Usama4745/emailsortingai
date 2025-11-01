@@ -32,6 +32,9 @@ try {
  */
 async function classifyEmail(userId, email) {
   try {
+    const client = new Anthropic({
+        apiKey: process.env.CLAUDE_API_KEY,
+      });
     // Check if client is initialized
     if (!client) {
       console.error('❌ Claude API client not initialized');
@@ -79,9 +82,10 @@ Respond with a JSON object containing:
 
 Only respond with valid JSON, no other text.`;
 
+
     // Call Claude API
     const message = await client.messages.create({
-      model: process.env.AI_MODEL || 'claude-3-5-sonnet-20241022',
+      model: process.env.AI_MODEL || 'claude-sonnet-4-5',
       max_tokens: 256,
       messages: [
         {
@@ -134,7 +138,7 @@ const client = new Anthropic({
   });
   
     const message = await client.messages.create({
-      model: process.env.AI_MODEL || 'claude-3-5-sonnet-20241022',
+      model: process.env.AI_MODEL || 'claude-sonnet-4-5',
       max_tokens: 150,
       messages: [
         {
@@ -174,9 +178,11 @@ ${emailsList}
 
 Respond with a numbered list of summaries, one per line (e.g., "1. Summary here\n2. Summary here")
 Only return the numbered list, no other content.`;
-
+const client = new Anthropic({
+    apiKey: process.env.CLAUDE_API_KEY,
+  });
     const message = await client.messages.create({
-      model: process.env.AI_MODEL || 'claude-3-5-sonnet-20241022',
+      model: process.env.AI_MODEL || 'claude-sonnet-4-5',
       max_tokens: 500,
       messages: [
         {
@@ -222,9 +228,11 @@ Respond with JSON:
 }
 
 Only respond with valid JSON, no other text.`;
-
+const client = new Anthropic({
+    apiKey: process.env.CLAUDE_API_KEY,
+  });
     const message = await client.messages.create({
-      model: process.env.AI_MODEL || 'claude-3-5-sonnet-20241022',
+      model: process.env.AI_MODEL || 'claude-sonnet-4-5',
       max_tokens: 256,
       messages: [
         {
