@@ -40,43 +40,59 @@ router.get(
   passport.authenticate('google', { failureRedirect: '/login' }),
   async (req, res) => {
     try {
+      console.log('=== GOOGLE OAUTH CALLBACK ===');
+      
       // User is authenticated by passport
       const user = req.user;
+      console.log('✅ User authenticated:', user.email);
 
       // Generate JWT token
       const token = generateToken(user._id);
-     
+      console.log('🔐 Token generated:', token.substring(0, 20) + '...');
 
       // Create primary account for the user if it doesn't exist
       const existingAccount = await Account.findOne({
         userId: user._id,
         isPrimary: true,
       });
+      console.log('📦 Existing account:', existingAccount ? 'YES' : 'NO');
 
       if (!existingAccount) {
-        // Get Gmail profile for email address
-        const profile = await gmailService.getUserProfile(user.googleAccessToken);
+        try {
+          // Get Gmail profile for email address
+          console.log('📧 Fetching Gmail profile...');
+          const profile = await gmailService.getUserProfile(user.googleAccessToken);
+          console.log('✅ Gmail profile fetched');
 
-        const account = new Account({
-          userId: user._id,
-          email: user.email,
-          accessToken: user.googleAccessToken,
-          refreshToken: user.googleRefreshToken,
-          tokenExpiresAt: user.googleTokenExpiresAt,
-          isPrimary: true,
-          syncStatus: 'pending',
-        });
+          const account = new Account({
+            userId: user._id,
+            email: user.email,
+            accessToken: user.googleAccessToken,
+            refreshToken: user.googleRefreshToken,
+            tokenExpiresAt: user.googleTokenExpiresAt,
+            isPrimary: true,
+            syncStatus: 'pending',
+          });
 
-        await account.save();
+          await account.save();
+          console.log('✅ Account created');
+        } catch (profileError) {
+          console.error('⚠️ Gmail profile error (non-fatal):', profileError.message);
+          // Continue anyway - don't block the login
+          console.log('⚠️ Continuing without Gmail profile...');
+        }
       }
 
       // Redirect to frontend with token
-      const redirectUrl = `${process.env.CLIENT_URL}/auth/success?token=${token}&userId=${user._id}`;
-      console.error("url is here ")
-      console.error(redirectUrl);
+      const redirectUrl = `${process.env.CLIENT_URL}/auth/callback?token=${token}&userId=${user._id}`;
+      console.log('✅ OAuth callback successful');
+      console.log('📧 User email:', user.email);
+      console.log('📍 Redirecting to:', redirectUrl);
       res.redirect(redirectUrl);
     } catch (error) {
-      console.error('Error in OAuth callback:', error);
+      console.error('❌ ERROR in OAuth callback:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       res.redirect(`${process.env.CLIENT_URL}/auth/error`);
     }
   }
