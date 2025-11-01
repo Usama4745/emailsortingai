@@ -1,0 +1,17 @@
+{
+    "name": "ai-email-sorter",
+    "version": "1.0.0",
+    "description": "AI-powered email sorting and management app",
+    "private": true,
+    "scripts": {
+      "install-all": "npm install && cd server && npm install && cd ../client && npm install && cd ..",
+      "start": "concurrently \"npm run server\" \"npm run client\"",
+      "server": "cd server && npm start",
+      "client": "cd client && npm start",
+      "build": "cd client && npm run build",
+      "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm start\""
+    },
+    "devDependencies": {
+      "concurrently": "^8.2.1"
+    }
+  }
