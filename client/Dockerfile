@@ -28,8 +28,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install serve to serve static files
-RUN npm install -g serve
+# Install serve to serve static files and wget for health checks
+RUN npm install -g serve && apk add --no-cache wget
 
 # Copy built app from builder
 COPY --from=builder /app/build ./build
@@ -46,5 +46,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Start serving static files
-CMD ["serve", "-s", "build", "-l", "3000"]
+# Start serving static files on all interfaces (0.0.0.0) for containerized environments
+CMD ["serve", "-s", "build", "--listen", "0.0.0.0:3000"]
