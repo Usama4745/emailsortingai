@@ -18,6 +18,7 @@
         "passport-google-oauth20": "^2.0.0",
         "googleapis": "^164.0.0",
         "express-session": "^1.17.3",
+        "connect-mongo": "^5.0.0",
         "@anthropic-ai/sdk": "^0.68.0",
         "jsonwebtoken": "^9.0.0",
         "dotenv": "^16.3.1",
