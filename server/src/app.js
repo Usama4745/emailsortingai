@@ -14,7 +14,7 @@ const rateLimit = require('express-rate-limit');
 const bodyParser = require('body-parser');
 const passport = require('passport');
 
-const { connectDB } = require('./config/database');
+const { connectDB, ensureConnection } = require('./config/database');
 const passportConfig = require('./config/passport');
 const { errorHandler } = require('./middleware/errorHandler');
 const { verifyJWT } = require('./middleware/auth');
@@ -69,6 +69,21 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
 });
 app.use('/api/', limiter);
+
+// Database connection middleware for serverless environments
+// Ensures DB connection is established before processing any API request
+app.use('/api/', async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (error) {
+    console.error('Database connection error:', error);
+    res.status(503).json({
+      error: 'Database connection failed',
+      message: 'Unable to connect to database. Please try again later.',
+    });
+  }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {

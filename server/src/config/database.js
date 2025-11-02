@@ -6,6 +6,13 @@
 
 const mongoose = require('mongoose');
 
+// Disable buffering for serverless environments
+// This ensures operations fail fast instead of timing out
+mongoose.set('bufferCommands', false);
+
+// Connection caching for serverless (Vercel, AWS Lambda, etc.)
+let cachedConnection = null;
+
 // Define Mongoose schemas
 const userSchema = new mongoose.Schema({
   googleId: {
@@ -179,17 +186,47 @@ const Category = mongoose.model('Category', categorySchema);
 const Email = mongoose.model('Email', emailSchema);
 
 /**
- * Connect to MongoDB
+ * Connect to MongoDB with serverless support
+ * Implements connection caching to reuse connections across invocations
  * @returns {Promise} MongoDB connection promise
  */
 async function connectDB() {
   try {
+    // If we have a cached connection and it's ready, reuse it
+    if (cachedConnection && mongoose.connection.readyState === 1) {
+      console.log('♻️  Reusing existing MongoDB connection');
+      return cachedConnection;
+    }
+
+    // If connection is in progress, wait for it
+    if (mongoose.connection.readyState === 2) {
+      console.log('⏳ Waiting for pending MongoDB connection...');
+      await new Promise((resolve) => {
+        mongoose.connection.once('connected', resolve);
+      });
+      return mongoose.connection;
+    }
+
     const dbUrl = process.env.DATABASE_URL || 'mongodb://localhost:27017/email-sorter';
-    await mongoose.connect(dbUrl);
+
+    // Configure connection options for serverless
+    const options = {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+      maxPoolSize: 10, // Maintain up to 10 socket connections
+      minPoolSize: 1, // Maintain at least 1 connection
+    };
+
+    console.log('🔌 Establishing new MongoDB connection...');
+    await mongoose.connect(dbUrl, options);
+
+    cachedConnection = mongoose.connection;
     console.log('✅ MongoDB connected successfully');
-    return mongoose.connection;
+
+    return cachedConnection;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
+    cachedConnection = null;
     throw error;
   }
 }
@@ -201,6 +238,7 @@ async function connectDB() {
 async function disconnectDB() {
   try {
     await mongoose.disconnect();
+    cachedConnection = null;
     console.log('✅ MongoDB disconnected');
   } catch (error) {
     console.error('❌ MongoDB disconnection error:', error);
@@ -208,9 +246,22 @@ async function disconnectDB() {
   }
 }
 
+/**
+ * Ensure database connection is established
+ * This is critical for serverless environments where each invocation needs a connection
+ * @returns {Promise} Resolves when connected
+ */
+async function ensureConnection() {
+  if (mongoose.connection.readyState !== 1) {
+    await connectDB();
+  }
+  return mongoose.connection;
+}
+
 module.exports = {
   connectDB,
   disconnectDB,
+  ensureConnection,
   User,
   Account,
   Category,
