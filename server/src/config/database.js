@@ -227,6 +227,24 @@ async function connectDB() {
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
     cachedConnection = null;
+
+    // Provide helpful error messages for common issues
+    if (error.name === 'MongooseServerSelectionError') {
+      console.error('\n⚠️  MongoDB Atlas Connection Failed');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('This error typically occurs when:');
+      console.error('1. Your IP address is not whitelisted in MongoDB Atlas');
+      console.error('2. Network connectivity issues prevent reaching MongoDB Atlas');
+      console.error('3. DATABASE_URL is incorrectly configured\n');
+      console.error('📋 Solutions for Docker:');
+      console.error('  • In MongoDB Atlas, go to Network Access');
+      console.error('  • Add IP Address: 0.0.0.0/0 (allows all IPs - for development)');
+      console.error('  • OR add your specific public IP address');
+      console.error('  • For production, use proper security group configurations\n');
+      console.error('📖 See DOCKER_SETUP.md for detailed instructions');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    }
+
     throw error;
   }
 }
