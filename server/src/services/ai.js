@@ -62,6 +62,9 @@ async function classifyEmail(userId, email) {
       .map((cat) => `- ${cat.name}: ${cat.description}`)
       .join('\n');
 
+    // Build list of exact category names for validation
+    const categoryNames = categories.map((cat) => cat.name).join(', ');
+
     // Create classification prompt
     const prompt = `You are an email classification AI. Analyze the following email and classify it into ONE of the provided categories.
 
@@ -72,6 +75,9 @@ Body (first 500 chars): ${email.body.substring(0, 500)}
 
 Available Categories:
 ${categoryDescriptions}
+
+IMPORTANT: You MUST respond with the EXACT category name from this list: ${categoryNames}
+Do not modify, abbreviate, or create new category names. Use only the exact names provided above.
 
 Respond with a JSON object containing:
 {
@@ -99,26 +105,55 @@ Only respond with valid JSON, no other text.`;
     const responseText = message.content[0].text;
     const classification = JSON.parse(responseText);
 
-    // Find category by name (case-insensitive matching)
+    // Trim and normalize the classification result
+    const normalizedClassificationName = classification.categoryName?.trim();
+
+    // Find category by name (case-insensitive matching with trimmed whitespace)
     const selectedCategory = categories.find(
-      (cat) => cat.name.toLowerCase() === classification.categoryName.toLowerCase()
+      (cat) => cat.name.trim().toLowerCase() === normalizedClassificationName?.toLowerCase()
     );
 
     if (!selectedCategory) {
       console.warn(
         `⚠️ AI returned category "${classification.categoryName}" which doesn't match any user categories. Available categories: ${categories.map(c => c.name).join(', ')}`
       );
+      console.warn(`⚠️ Falling back to first available category: ${categories[0].name}`);
+
+      // Fallback to first category instead of returning null
+      return {
+        categoryId: categories[0]._id,
+        categoryName: categories[0].name,
+        confidence: 0.3, // Lower confidence since it's a fallback
+        reasoning: `No exact match found for "${classification.categoryName}", using fallback category`,
+      };
     }
 
     return {
-      categoryId: selectedCategory?._id || null,
-      categoryName: selectedCategory ? selectedCategory.name : classification.categoryName,
+      categoryId: selectedCategory._id,
+      categoryName: selectedCategory.name,
       confidence: classification.confidence,
       reasoning: classification.reasoning,
     };
   } catch (error) {
     console.error('❌ Error classifying email:', error.message);
-    // Return unclassified instead of throwing
+
+    // Try to get categories for fallback
+    try {
+      const categories = await Category.find({ userId });
+      if (categories.length > 0) {
+        console.warn(`⚠️ Using fallback category due to error: ${categories[0].name}`);
+        return {
+          categoryId: categories[0]._id,
+          categoryName: categories[0].name,
+          confidence: 0.1, // Very low confidence due to error
+          error: error.message,
+        };
+      }
+    } catch (fallbackError) {
+      console.error('❌ Failed to fetch categories for fallback:', fallbackError.message);
+    }
+
+    // Last resort: return null if no categories available
     return {
       categoryId: null,
       categoryName: 'Unclassified',
