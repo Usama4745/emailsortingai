@@ -115,9 +115,9 @@ async function startServer() {
     await connectDB();
     console.log('✅ Connected to MongoDB');
 
-    // Start listening
-    app.listen(PORT, () => {
-      console.log(`✅ Server running on http://localhost:${PORT}`);
+    // Start listening on all interfaces (0.0.0.0) for Docker/containerized environments
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
       console.log(`📧 Email Sorter API ready`);
     });
   } catch (error) {
