@@ -1,0 +1,126 @@
+# docker-compose-dev.yml
+# Development Docker Compose setup with local MongoDB
+# Use this for local testing without external MongoDB
+#
+# SETUP INSTRUCTIONS:
+# 1. Copy .env.example to .env
+# 2. Fill in your Google OAuth and Claude API credentials
+# 3. Run: podman compose -f docker-compose-dev.yml up --build
+
+version: '3.8'
+
+# Load environment variables from .env file
+x-environment: &common-env
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+  GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+  CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+  JWT_SECRET: ${JWT_SECRET}
+  SESSION_SECRET: ${SESSION_SECRET}
+
+services:
+  # ==========================================
+  # MongoDB Service
+  # ==========================================
+  mongodb:
+    image: docker.io/library/mongo:6
+    container_name: email-sorter-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: email-sorter
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - email-sorter-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/email-sorter --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==========================================
+  # Express Backend Service
+  # ==========================================
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: email-sorter-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      <<: *common-env
+      DATABASE_URL: mongodb://mongodb:27017/email-sorter
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 5000
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+      AI_MODEL: ${AI_MODEL:-claude-sonnet-4-5}
+      JWT_EXPIRE: ${JWT_EXPIRE:-7d}
+      MAX_EMAILS_PER_SYNC: ${MAX_EMAILS_PER_SYNC:-50}
+      EMAIL_SYNC_INTERVAL: ${EMAIL_SYNC_INTERVAL:-3600000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+    networks:
+      - email-sorter-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:5000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==========================================
+  # React Frontend Service
+  # ==========================================
+  frontend:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: email-sorter-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5000/api}
+      REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    networks:
+      - email-sorter-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  email-sorter-network:
+    driver: bridge
+
+volumes:
+  mongodb-data:
+    driver: local
