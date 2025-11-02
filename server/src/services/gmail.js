@@ -191,6 +191,37 @@ function extractUnsubscribeUrl(header) {
 }
 
 /**
+ * Mark email as read in Gmail
+ * @param {string} accountId - Account ID in database
+ * @param {string} gmailId - Gmail message ID
+ * @returns {Promise<boolean>} Success status
+ */
+async function markEmailAsRead(accountId, gmailId) {
+  try {
+    const account = await Account.findById(accountId);
+    if (!account) {
+      throw new Error('Account not found');
+    }
+
+    const gmail = createGmailClient(account.accessToken);
+
+    // Mark as read by removing UNREAD label
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: gmailId,
+      requestBody: {
+        removeLabelIds: ['UNREAD'],
+      },
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error marking email as read:', error);
+    throw error;
+  }
+}
+
+/**
  * Archive email in Gmail (move to archive label)
  * @param {string} accountId - Account ID in database
  * @param {string} gmailId - Gmail message ID
@@ -339,6 +370,7 @@ module.exports = {
   fetchUnreadEmails,
   parseEmailMessage,
   extractUnsubscribeUrl,
+  markEmailAsRead,
   archiveEmail,
   archiveEmails,
   deleteEmail,

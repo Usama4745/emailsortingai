@@ -74,9 +74,10 @@ async function processNewEmails(userId, accountId) {
           );
         }
 
-        // Archive email in Gmail
-        await gmailService.archiveEmail(accountId, gmailEmail.gmailId);
-        console.log(`Archived email ${gmailEmail.gmailId} in Gmail`);
+        // Mark email as read in Gmail to prevent re-processing
+        // (we don't archive so emails remain accessible in Gmail)
+        await gmailService.markEmailAsRead(accountId, gmailEmail.gmailId);
+        console.log(`Marked email ${gmailEmail.gmailId} as read in Gmail`);
 
         processedEmails.push(emailDoc);
       } catch (error) {
@@ -115,6 +116,7 @@ async function getEmailsByCategory(userId, categoryId, options = {}) {
     const emails = await Email.find({
       userId,
       categoryId,
+      isArchived: { $ne: true },
     })
       .select('from subject aiSummary receivedAt isRead gmailId')
       .limit(limit)
@@ -124,6 +126,7 @@ async function getEmailsByCategory(userId, categoryId, options = {}) {
     const total = await Email.countDocuments({
       userId,
       categoryId,
+      isArchived: { $ne: true },
     });
 
     return {
@@ -279,6 +282,7 @@ async function searchEmails(userId, query, options = {}) {
     const emails = await Email.find(
       {
         userId,
+        isArchived: { $ne: true },
         $or: [
           { subject: { $regex: query, $options: 'i' } },
           { aiSummary: { $regex: query, $options: 'i' } },
@@ -293,6 +297,7 @@ async function searchEmails(userId, query, options = {}) {
 
     const total = await Email.countDocuments({
       userId,
+      isArchived: { $ne: true },
       $or: [
         { subject: { $regex: query, $options: 'i' } },
         { aiSummary: { $regex: query, $options: 'i' } },
