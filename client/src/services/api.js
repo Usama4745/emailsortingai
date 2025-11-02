@@ -16,7 +16,6 @@ const api = axios.create({
  * Request interceptor - add JWT token to headers
  */
 api.interceptors.request.use((config) => {
-    console.error("aketubg ib")
   const token = localStorage.getItem('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -31,9 +30,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear token and redirect to login
+      // Clear token
       localStorage.removeItem('authToken');
-      window.location.href = '/login';
+
+      // Only redirect if not already on login page and not on callback page
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/login' && currentPath !== '/auth/callback') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

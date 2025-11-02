@@ -8,7 +8,7 @@ const express = require('express');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const { User, Account } = require('../config/database');
-const { generateToken } = require('../middleware/auth');
+const { generateToken, verifyJWT } = require('../middleware/auth');
 const gmailService = require('../services/gmail');
 
 const router = express.Router();
@@ -37,7 +37,7 @@ router.get(
  */
 router.get(
   '/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
+  passport.authenticate('google', { failureRedirect: `${process.env.CLIENT_URL}/login` }),
   async (req, res) => {
     try {
       console.log('=== GOOGLE OAUTH CALLBACK ===');
@@ -93,7 +93,7 @@ router.get(
       console.error('❌ ERROR in OAuth callback:', error);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
-      res.redirect(`${process.env.CLIENT_URL}/auth/error`);
+      res.redirect(`${process.env.CLIENT_URL}/login`);
     }
   }
 );
@@ -178,7 +178,7 @@ router.get('/verify', async (req, res) => {
  * Get current user info
  * GET /api/auth/me
  */
-router.get('/me', async (req, res) => {
+router.get('/me', verifyJWT, async (req, res) => {
   try {
     // Get user from request (set by auth middleware)
     const user = req.user;
