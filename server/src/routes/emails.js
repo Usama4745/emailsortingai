@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
     const { categoryId, limit = 50, page = 0, search } = req.query;
     const skip = parseInt(page) * parseInt(limit);
 
-    let query = { userId: req.userId };
+    let query = { userId: req.userId, isArchived: { $ne: true } };
 
     // Filter by category if provided
     if (categoryId && categoryId !== 'all') {
