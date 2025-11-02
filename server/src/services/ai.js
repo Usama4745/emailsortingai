@@ -99,12 +99,20 @@ Only respond with valid JSON, no other text.`;
     const responseText = message.content[0].text;
     const classification = JSON.parse(responseText);
 
-    // Find category by name
-    const selectedCategory = categories.find((cat) => cat.name === classification.categoryName);
+    // Find category by name (case-insensitive matching)
+    const selectedCategory = categories.find(
+      (cat) => cat.name.toLowerCase() === classification.categoryName.toLowerCase()
+    );
+
+    if (!selectedCategory) {
+      console.warn(
+        `⚠️ AI returned category "${classification.categoryName}" which doesn't match any user categories. Available categories: ${categories.map(c => c.name).join(', ')}`
+      );
+    }
 
     return {
       categoryId: selectedCategory?._id || null,
-      categoryName: classification.categoryName,
+      categoryName: selectedCategory ? selectedCategory.name : classification.categoryName,
       confidence: classification.confidence,
       reasoning: classification.reasoning,
     };
