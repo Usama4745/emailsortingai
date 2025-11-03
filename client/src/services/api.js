@@ -107,6 +107,12 @@ export const syncEmails = (accountId) =>
   api.post('/emails/sync', accountId ? { accountId } : {});
 
 /**
+ * Stop syncing emails
+ */
+export const stopSyncEmails = (accountId) =>
+  api.post('/emails/stop-sync', accountId ? { accountId } : {});
+
+/**
  * Delete emails
  */
 export const deleteEmails = (emailIds) =>

@@ -76,6 +76,21 @@ function DashboardPage() {
   };
 
   /**
+   * Handle stop sync
+   */
+  const handleStopSync = async () => {
+    try {
+      await api.stopSyncEmails();
+      toast.info('Stop sync requested');
+      setSyncing(false);
+      loadData();
+    } catch (error) {
+      console.error('Error stopping sync:', error);
+      toast.error('Failed to stop sync');
+    }
+  };
+
+  /**
    * Handle create/update category
    */
   const handleSaveCategory = async (categoryData) => {
@@ -175,6 +190,14 @@ function DashboardPage() {
                   <FaSync className={syncing ? 'animate-spin' : ''} />
                   {syncing ? 'Syncing...' : 'Sync Emails'}
                 </button>
+                {syncing && (
+                  <button
+                    onClick={handleStopSync}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    Stop Sync
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setEditingCategory(null);

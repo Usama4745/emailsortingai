@@ -139,6 +139,45 @@ router.post('/sync', async (req, res) => {
 });
 
 /**
+ * Stop email sync
+ * POST /api/emails/stop-sync
+ * Body: { accountId? }
+ */
+router.post('/stop-sync', async (req, res) => {
+  try {
+    const { accountId } = req.body;
+
+    let accountIds = [];
+
+    if (accountId) {
+      // Stop specific account sync
+      accountIds = [accountId];
+    } else {
+      // Stop all account syncs
+      const accounts = await Account.find({ userId: req.userId, syncStatus: 'syncing' });
+      accountIds = accounts.map((a) => a._id.toString());
+    }
+
+    if (accountIds.length === 0) {
+      return res.status(400).json({ error: 'No syncing accounts found' });
+    }
+
+    // Request stop for each account
+    for (const accId of accountIds) {
+      emailService.requestStopSync(accId);
+    }
+
+    res.json({
+      message: 'Stop sync requested',
+      accountIds,
+    });
+  } catch (error) {
+    console.error('Error stopping sync:', error);
+    res.status(500).json({ error: 'Failed to stop sync' });
+  }
+});
+
+/**
  * Delete multiple emails
  * DELETE /api/emails
  * Body: { emailIds: [array of email IDs] }

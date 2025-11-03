@@ -8,6 +8,36 @@ const { Email, Account, Category } = require('../config/database');
 const gmailService = require('./gmail');
 const aiService = require('./ai');
 
+// In-memory store for tracking stop sync requests
+const stopSyncRequests = new Map();
+
+/**
+ * Request to stop sync for an account
+ * @param {string} accountId - Account ID
+ */
+function requestStopSync(accountId) {
+  stopSyncRequests.set(accountId, true);
+  console.log(`Stop sync requested for account ${accountId}`);
+}
+
+/**
+ * Check if stop sync has been requested for an account
+ * @param {string} accountId - Account ID
+ * @returns {boolean} True if stop sync requested
+ */
+function isStopSyncRequested(accountId) {
+  return stopSyncRequests.get(accountId) === true;
+}
+
+/**
+ * Clear stop sync request for an account
+ * @param {string} accountId - Account ID
+ */
+function clearStopSyncRequest(accountId) {
+  stopSyncRequests.delete(accountId);
+  console.log(`Cleared stop sync request for account ${accountId}`);
+}
+
 /**
  * Process and import new emails for a user account
  * Fetches unread emails from Gmail, classifies them, summarizes them, and archives them
@@ -18,6 +48,9 @@ const aiService = require('./ai');
 async function processNewEmails(userId, accountId) {
   try {
     console.log(`Processing emails for user ${userId}, account ${accountId}`);
+
+    // Clear any previous stop sync request
+    clearStopSyncRequest(accountId);
 
     // Update account sync status
     await Account.updateOne({ _id: accountId }, { syncStatus: 'syncing' });
@@ -35,6 +68,17 @@ async function processNewEmails(userId, accountId) {
     const processedEmails = [];
     for (const gmailEmail of gmailEmails) {
       try {
+        // Check if stop sync has been requested
+        if (isStopSyncRequested(accountId)) {
+          console.log(`Stop sync requested for account ${accountId}, stopping email processing`);
+          await Account.updateOne(
+            { _id: accountId },
+            { syncStatus: 'completed', lastSyncAt: new Date() }
+          );
+          clearStopSyncRequest(accountId);
+          return processedEmails;
+        }
+
         // Check if email already exists
         const existingEmail = await Email.findOne({ gmailId: gmailEmail.gmailId });
         if (existingEmail) {
@@ -323,4 +367,7 @@ module.exports = {
   deleteEmailsByIds,
   archiveEmailsByIds,
   searchEmails,
+  requestStopSync,
+  isStopSyncRequested,
+  clearStopSyncRequest,
 };
