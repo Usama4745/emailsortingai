@@ -135,17 +135,29 @@ function parseEmailMessage(message) {
   const headers = message.payload.headers;
   const getHeader = (name) => headers.find((h) => h.name === name)?.value || '';
 
-  // Extract body content
+  // Extract body content (both plain text and HTML)
   let body = '';
+  let htmlBody = '';
+
   if (message.payload.parts) {
-    // Multipart message - get text/plain part
+    // Multipart message - get text/plain and text/html parts
     const textPart = message.payload.parts.find((p) => p.mimeType === 'text/plain');
+    const htmlPart = message.payload.parts.find((p) => p.mimeType === 'text/html');
+
     if (textPart && textPart.body.data) {
       body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
     }
+    if (htmlPart && htmlPart.body.data) {
+      htmlBody = Buffer.from(htmlPart.body.data, 'base64').toString('utf-8');
+    }
   } else if (message.payload.body && message.payload.body.data) {
     // Simple message
-    body = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
+    const content = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
+    if (message.payload.mimeType === 'text/html') {
+      htmlBody = content;
+    } else {
+      body = content;
+    }
   }
 
   // Extract unsubscribe link from headers
@@ -160,6 +172,7 @@ function parseEmailMessage(message) {
     subject: getHeader('Subject'),
     snippet: message.snippet,
     body: body,
+    htmlBody: htmlBody,
     receivedAt: new Date(parseInt(message.internalDate)),
     unsubscribeUrl: unsubscribeUrl,
     hasUnsubscribeLink: !!unsubscribeUrl,

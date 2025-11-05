@@ -4,10 +4,11 @@
  * Shows full email content with read-only view
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FaArrowLeft, FaTrash } from 'react-icons/fa';
+import DOMPurify from 'isomorphic-dompurify';
 import * as api from '../services/api';
 
 function EmailPage() {
@@ -56,6 +57,25 @@ function EmailPage() {
       }
     }
   };
+
+  /**
+   * Sanitize HTML content for safe rendering
+   */
+  const sanitizedHtml = useMemo(() => {
+    if (!email || !email.htmlBody) return null;
+    return DOMPurify.sanitize(email.htmlBody, {
+      ALLOWED_TAGS: [
+        'p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'div', 'span', 'blockquote', 'pre', 'code', 'hr', 'b', 'i', 's', 'del',
+      ],
+      ALLOWED_ATTR: [
+        'href', 'src', 'alt', 'title', 'width', 'height', 'style', 'class',
+        'target', 'rel', 'colspan', 'rowspan',
+      ],
+      ALLOW_DATA_ATTR: false,
+    });
+  }, [email]);
 
   if (loading) {
     return (
@@ -137,9 +157,20 @@ function EmailPage() {
             {/* Full Email Content */}
             <div className="border-t pt-6">
               <h3 className="font-semibold text-gray-900 mb-4">Full Email</h3>
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 whitespace-pre-wrap text-gray-700 overflow-auto max-h-96">
-                {email.body}
-              </div>
+              {sanitizedHtml ? (
+                <div
+                  className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-gray-700 overflow-auto max-h-96 email-content"
+                  dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                  style={{
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
+                />
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 whitespace-pre-wrap text-gray-700 overflow-auto max-h-96">
+                  {email.body}
+                </div>
+              )}
             </div>
 
             {/* Unsubscribe Info */}
