@@ -139,6 +139,7 @@ const emailSchema = new mongoose.Schema({
   to: String,
   subject: String,
   body: String,
+  htmlBody: String,
   snippet: String,
   // AI-generated content
   aiSummary: String,
