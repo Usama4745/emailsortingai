@@ -1,10 +1,11 @@
 
-demo link https://emailaifront.vercel.app/
 
 npm install
 cd server & npm install
 cd client & npm install
 npm run start
+
+<img width="741" height="760" alt="image" src="https://github.com/user-attachments/assets/74274a34-1de3-46c5-8438-87d9be803da1" />
 
 <img width="485" height="119" alt="image" src="https://github.com/user-attachments/assets/ebd6e047-8884-4b00-acd2-e05b402006d4" />
 
